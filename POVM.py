@@ -64,10 +64,9 @@ def POVM_module_1(theta1, theta2, phi1, phi2, ancilla, target)-> Program:
     POVM_module_1_program.inst(CNOT(target, ancilla[0]))
 
     # Controlled rotation for path p1
-    if theta1 != 0:
-        POVM_module_1_program.inst(X(ancilla[0]))
-        POVM_module_1_program.inst(nCU1('y', 2*(theta1 + np.pi/2), [ancilla[0]], target))  # not sure if angle should not be 2x
-        POVM_module_1_program.inst(X(ancilla[0]))
+    POVM_module_1_program.inst(X(ancilla[0]))
+    POVM_module_1_program.inst(nCU1('y', 2*(theta1 + np.pi/2), [ancilla[0]], target))  # not sure if angle should not be 2x
+    POVM_module_1_program.inst(X(ancilla[0]))
 
     # Controlled rotation for path p2
     if theta2 != 0:
@@ -104,18 +103,19 @@ def POVM_module_2(theta3, theta4)-> Program:
     # bs2: split p3 and p4 channels
     POVM_module_2_program.inst(CCNOT(target, ancilla[0], ancilla[1]))
 
-    # p3 rotation
+    # # p3 rotation
     POVM_module_2_program.inst(X(ancilla[1]))
     POVM_module_2_program.inst(nCU1('y', 2*(theta3 + np.pi/2), ancilla, target))
     POVM_module_2_program.inst(X(ancilla[1]))
 
     # p4 rotation
-    POVM_module_2_program.inst(nCU1('y', 2*theta4, ancilla, target))
+    if theta4 != 0:
+        POVM_module_2_program.inst(nCU1('y', 2*theta4, ancilla, target))
 
     # SWAP
     POVM_module_2_program.inst(CSWAP(ancilla[0], target, ancilla[1]))
     POVM_module_2_program.inst(CNOT(ancilla[0], ancilla[1]))  # ??
-    POVM_module_2_program.inst(nCU1('z', np.pi, [ancilla[0]], ancilla[1]))  # fix a minus sign (not really necessary)
+    # POVM_module_2_program.inst(nCU1('z', np.pi, [ancilla[0]], ancilla[1]))  # fix a minus sign (not really necessary)
 
     return POVM_module_2_program
 
@@ -126,10 +126,12 @@ if __name__ == '__main__':
     simulation = (int(sys.argv[1]) == 1)
     POVM_parts = int(sys.argv[2])
     Kraus = int(sys.argv[3])
+    shots = int(sys.argv[4])
 
     print('Simulation=' + str(simulation))
     print('POVM_parts='+str(POVM_parts))
     print('KRAUS ops='+str(Kraus))
+    print('shots = ' + str(shots))
 
     if POVM_parts == 2:
         # initial state params
@@ -197,14 +199,14 @@ if __name__ == '__main__':
             program.inst(nCU1('y', 7*np.pi/3, ancilla, target))
 
         # fix paths encodings: 11->01
-        program.inst(CNOT(ancilla[1], ancilla[0]))
+        program.inst(CNOT(ancilla[1], ancilla[0]))  # adsfdsfdsds
 
     # Measurements
     ro = program.declare('ro', 'BIT', len(qubits))
     program.inst([MEASURE(qubit, ro[idx]) for idx, qubit in enumerate(qubits)])
 
     # No shots
-    program.wrap_in_numshots_loop(100000)
+    program.wrap_in_numshots_loop(shots)
     # Compile to QPU
     binary_reset = qpu.compile(program)
 
