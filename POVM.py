@@ -135,12 +135,12 @@ if __name__ == '__main__':
 
     if POVM_parts == 2:
         # initial state params
-        theta0 = 2*np.pi/3
+        theta0 = 2*np.pi/4
         phi0 = 0
 
         # module 1 parameters
-        theta1 = np.pi/4
-        theta2 = np.pi/4
+        theta1 = np.pi/6
+        theta2 = np.pi/2
         phi1 = 0
         phi2 = 0
 
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     ancilla = [11, 17]
     target = 10
 
-    qpu = get_qc(lattice, as_qvm=simulation)
+    qpu = get_qc(lattice, as_qvm=False)
 
     print(f'All qubits on {lattice}: {qpu.device.qubits()}')
     print(f'\nSelected qubits: {qubits}')
