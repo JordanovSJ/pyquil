@@ -47,7 +47,7 @@ def nCU1(axis, angle, ctrls, target) -> Program:
     return nCU1_program
 
 
-def POVM_module_1(theta1, theta2, phi1, phi2, ancilla, target)-> Program:
+def POVM_module_1(theta1, theta2, ancilla, target)-> Program:
     """
     :param theta1: REAL
     :param theta2: REAL
@@ -60,38 +60,20 @@ def POVM_module_1(theta1, theta2, phi1, phi2, ancilla, target)-> Program:
 
     POVM_module_1_program = Program()
 
-    # BS1: split paths p1 and p2
-    POVM_module_1_program.inst(CNOT(target, ancilla[0]))
-
     # Controlled rotation for path p1
-    POVM_module_1_program.inst(X(ancilla[0]))
-    POVM_module_1_program.inst(nCU1('y', 2*(theta1 + np.pi/2), [ancilla[0]], target))  # not sure if angle should not be 2x
-    POVM_module_1_program.inst(X(ancilla[0]))
+    if theta1 != 0:
+        POVM_module_1_program.inst(X(target))
+        POVM_module_1_program.inst(nCU1('y', 2*theta1, [target], ancilla[0]))  # not sure if angle should not be 2x
+        POVM_module_1_program.inst(X(target))
 
     # Controlled rotation for path p2
     if theta2 != 0:
-        POVM_module_1_program.inst(nCU1('y', 2*theta2, [ancilla[0]], target))
-
-    # Instead of branching to t-channel, perform swap of the ancilla qubit and the target
-    POVM_module_1_program.inst(SWAP(target, ancilla[0]))
-
-    # for the sake of clarity
-    POVM_module_1_program.inst(X(ancilla[0]))
-    POVM_module_1_program.inst(Z(ancilla[1]))
-
-    # phase shifts
-    if phi1 != 0:
-        POVM_module_1_program.inst(X(ancilla[0]))
-        POVM_module_1_program.inst(nCU1('z', phi1, [ancilla[0]], target))
-        POVM_module_1_program.inst(X(ancilla[0]))
-
-    if phi2 != 0:
-        POVM_module_1_program.inst(nCU1('z', phi2, [ancilla[0]], target))
+        POVM_module_1_program.inst(nCU1('y', 2*theta2, [target], ancilla[0]))
 
     return POVM_module_1_program
 
 
-def POVM_module_2(theta3, theta4)-> Program:
+def POVM_module_2(theta3, theta4, ancilla, target)-> Program:
     """
     :param theta3: REAL
     :param theta4: REAL
@@ -100,24 +82,72 @@ def POVM_module_2(theta3, theta4)-> Program:
 
     POVM_module_2_program = Program()
 
-    # bs2: split p3 and p4 channels
-    POVM_module_2_program.inst(CCNOT(target, ancilla[0], ancilla[1]))
+    # # c22 rotation
+    POVM_module_2_program.inst(X(target))
+    POVM_module_2_program.inst(nCU1('y', 2*theta3, [target, ancilla[0]], ancilla[1]))
+    POVM_module_2_program.inst(X(target))
 
-    # # p3 rotation
-    POVM_module_2_program.inst(X(ancilla[1]))
-    POVM_module_2_program.inst(nCU1('y', 2*(theta3 + np.pi/2), ancilla, target))
-    POVM_module_2_program.inst(X(ancilla[1]))
-
-    # p4 rotation
+    # c22 rotation
     if theta4 != 0:
-        POVM_module_2_program.inst(nCU1('y', 2*theta4, ancilla, target))
-
-    # SWAP
-    POVM_module_2_program.inst(CSWAP(ancilla[0], target, ancilla[1]))
-    POVM_module_2_program.inst(CNOT(ancilla[0], ancilla[1]))  # ??
-    # POVM_module_2_program.inst(nCU1('z', np.pi, [ancilla[0]], ancilla[1]))  # fix a minus sign (not really necessary)
+        POVM_module_2_program.inst(nCU1('y', 2*theta4, [target, ancilla[0]], ancilla[1]))
 
     return POVM_module_2_program
+
+
+def two_POVM(theta0, phi0, theta1, theta2) -> Program:
+
+    # for the purpose of POVM we choose the most connected qubit (10 in the case) to be the measured one
+    ancilla = [2]
+    target = 1
+
+    program = Program(RESET())
+    # create initial state
+    if theta0 != 0:
+        program.inst(RY(theta0, target))
+    if phi0 != 0:
+        program.inst(RZ(phi0, target))
+
+    # 1st AP module
+    program.inst(POVM_module_1(theta1, theta2, ancilla, target))
+
+    return program
+
+
+def three_POVM(theta0, phi0, theta1, theta2, theta3, theta4, alpha_uii, Kraus) -> Program:
+
+    # for the purpose of POVM we choose the most connected qubit (10 in the case) to be the measured one
+    ancilla = [11, 17]
+    target = 10
+
+    program = Program(RESET())
+    # create initial state
+    if theta0 != 0:
+        program.inst(RY(theta0, target))
+    if phi0 != 0:
+        program.inst(RZ(phi0, target))
+
+    # 1st AP module
+    program.inst(POVM_module_1(theta1, theta2, ancilla, target))
+
+    # 2nd AP module (+ U2, T1, T2, T3)
+
+    program.inst(nCU1('y', alpha_uii, [ancilla[0]], target))
+    program.inst(POVM_module_2(theta3, theta4, ancilla, target))
+
+    # Kraus operators
+    if Kraus == 1:
+        # T2
+        program.inst(X(ancilla[1]))
+        program.inst(nCU1('y', 2 * np.pi / 3, ancilla, target))
+        program.inst(X(ancilla[1]))
+
+        # T3
+        program.inst(nCU1('y', 7 * np.pi / 3, ancilla, target))
+
+    # fix paths encodings: 11->01
+    program.inst(CNOT(ancilla[1], ancilla[0]))
+
+    return program
 
 
 if __name__ == '__main__':
@@ -135,14 +165,16 @@ if __name__ == '__main__':
 
     if POVM_parts == 2:
         # initial state params
-        theta0 = 2*np.pi/4
+        theta0 = 2*np.pi/3
         phi0 = 0
 
         # module 1 parameters
-        theta1 = np.pi/6
-        theta2 = np.pi/2
-        phi1 = 0
-        phi2 = 0
+        theta1 = np.pi/4
+        theta2 = np.pi/4
+
+        lattice = "Aspen-4-2Q-A"
+        qubits = [1, 2]
+        program = two_POVM(theta0, phi0, theta1, theta2)
 
     elif POVM_parts == 3:
         theta0 = 0
@@ -152,54 +184,20 @@ if __name__ == '__main__':
         theta2 = np.pi/2
         theta3 = 0
         theta4 = np.pi/2
-        phi1 = 0
-        phi2 = 0
 
         alpha_ui = 0
         alpha_uii = -np.pi / 2
 
+        lattice = "Aspen-4-3Q-A"
+        qubits = [10, 11, 17]  # this defined inside three_POVM as well ...
+        program = three_POVM(theta0, phi0, theta1, theta2, theta3, theta4, alpha_uii, Kraus)
     else:
         raise Exception('Wrong arguments!')
 
-    lattice = "Aspen-4-3Q-A"
-
-    # for the purpose of POVM we choose the most connected qubit (10 in the case) to be the measured one
-    qubits = [11, 10, 17]  # check if still correct
-    ancilla = [11, 17]
-    target = 10
-
-    qpu = get_qc(lattice, as_qvm=False)
+    qpu = get_qc(lattice, as_qvm=simulation)
 
     print(f'All qubits on {lattice}: {qpu.device.qubits()}')
     print(f'\nSelected qubits: {qubits}')
-
-    program = Program(RESET())
-    # create initial state
-    if theta0 != 0:
-        program.inst(RY(theta0, target))
-    if phi0 != 0:
-        program.inst(RZ(phi0, target))
-
-    # 1st AP module
-    program.inst(POVM_module_1(theta1, theta2, phi1, phi2, ancilla, target))
-
-    # 2nd AP module (+ U2, T1, T2, T3)
-    if POVM_parts == 3:
-        program.inst(nCU1('y', alpha_uii, [ancilla[0]], target))
-        program.inst(POVM_module_2(theta3, theta4))
-
-        # Kraus operators (Tsss)
-        if Kraus == 1:
-            # T2
-            program.inst(X(ancilla[1]))
-            program.inst(nCU1('y', 2*np.pi/3, ancilla, target))
-            program.inst(X(ancilla[1]))
-
-            # T3
-            program.inst(nCU1('y', 7*np.pi/3, ancilla, target))
-
-        # fix paths encodings: 11->01
-        program.inst(CNOT(ancilla[1], ancilla[0]))  # adsfdsfdsds
 
     # Measurements
     ro = program.declare('ro', 'BIT', len(qubits))
@@ -215,7 +213,7 @@ if __name__ == '__main__':
     total = time.time() - start
     print(f'\nExecution time with active reset: {total:.3f} s')
 
-    # magic (there should be a less messy way to reformat those, but cant be bothered
+    # magic (there should be a better way to re-format those results)
 
     # reformat results
     results = list(results)
@@ -224,9 +222,10 @@ if __name__ == '__main__':
 
     # get counts and the vector.
     counts = {}
-    output_vector = np.zeros(8)
+    n_qubits = len(qubits)
+    output_vector = np.zeros(n_qubits**2)
     for i in range(8):
-        counts[str(bin(i)[2:]).zfill(3)] = 0
+        counts[str(bin(i)[2:]).zfill(n_qubits)] = 0
     for result in results:
         counts[result] += 1
         output_vector[int(result, 2)] += 1

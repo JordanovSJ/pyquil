@@ -29,8 +29,8 @@ def ghz_program(qubits: List[int]) -> Program:
 if __name__ == '__main__':
 
     n_qubits = int(sys.argv[1])
-    lattice = "Aspen-4-7Q-A"
-    device_qubits_ordered = [7, 0, 1, 2, 15, 14, 13]
+    lattice = "Aspen-4-16Q-A"
+    device_qubits_ordered = [1,0,7,6,5,4,3,2,15,14,13,12,11,10,17,16]
 
     qpu = get_qc(lattice, as_qvm=False)
     qubits = device_qubits_ordered[:n_qubits]
