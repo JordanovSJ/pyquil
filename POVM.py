@@ -224,7 +224,7 @@ if __name__ == '__main__':
     counts = {}
     n_qubits = len(qubits)
     output_vector = np.zeros(n_qubits**2)
-    for i in range(8):
+    for i in range(2**n_qubits):
         counts[str(bin(i)[2:]).zfill(n_qubits)] = 0
     for result in results:
         counts[result] += 1
